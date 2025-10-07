@@ -19,12 +19,22 @@ class WifiAwareServiceImpl(private val context: Context) : WifiAwareService {
         Log.d("WifiAwareServiceImpl", "Connection status: ${manager.getConnectionStatus()}")
         manager.sendMessage(message)
     }
-    
+
     override fun isPeerConnected(): Boolean {
         return manager.isPeerConnected()
     }
-    
+
     override fun getConnectionStatus(): String {
         return manager.getConnectionStatus()
+    }
+
+    override fun sendAttachment(data: ByteArray, type: String) {
+        Log.d("WifiAwareServiceImpl", "Sending attachment: type=$type, size=${data.size}")
+        manager.sendAttachment(data, type)
+    }
+
+    override fun setAttachmentCallback(callback: (ByteArray, String) -> Unit) {
+        Log.d("WifiAwareServiceImpl", "Setting attachment callback")
+        manager.setAttachmentCallback(callback)
     }
 }

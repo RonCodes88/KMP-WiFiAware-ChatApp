@@ -21,12 +21,50 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 
 data class Message(
     val content: String,
     val isSent: Boolean,
-    val isServiceMessage: Boolean = false
-)
+    val isServiceMessage: Boolean = false,
+    val attachmentData: ByteArray? = null,
+    val attachmentType: String? = null
+) {
+    val isAttachment: Boolean
+        get() = attachmentData != null
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+
+        other as Message
+
+        if (content != other.content) return false
+        if (isSent != other.isSent) return false
+        if (isServiceMessage != other.isServiceMessage) return false
+        if (attachmentData != null) {
+            if (other.attachmentData == null) return false
+            if (!attachmentData.contentEquals(other.attachmentData)) return false
+        } else if (other.attachmentData != null) return false
+        if (attachmentType != other.attachmentType) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = content.hashCode()
+        result = 31 * result + isSent.hashCode()
+        result = 31 * result + isServiceMessage.hashCode()
+        result = 31 * result + (attachmentData?.contentHashCode() ?: 0)
+        result = 31 * result + (attachmentType?.hashCode() ?: 0)
+        return result
+    }
+}
 
 @Composable
 fun MessagingScreen(
@@ -36,11 +74,17 @@ fun MessagingScreen(
     discoveryStatus: String,
     lastReceivedMessage: String,
     lastSentMessage: String,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onSendAttachment: (ByteArray, String) -> Unit = { _, _ -> }
 ) {
     var text by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    
+
+    // Setup image picker
+    val launchImagePicker = rememberImagePickerLauncher { data, type ->
+        onSendAttachment(data, type)
+    }
+
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -161,6 +205,17 @@ fun MessagingScreen(
                 modifier = Modifier.padding(8.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
+                // Attachment button
+                IconButton(
+                    onClick = { launchImagePicker() }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Attach image",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
@@ -206,16 +261,56 @@ private fun MessageBubble(message: Message) {
             ),
             shape = RoundedCornerShape(16.dp)
         ) {
-            Text(
-                text = message.content,
-                modifier = Modifier.padding(12.dp),
-                color = when {
-                    message.isServiceMessage -> MaterialTheme.colorScheme.onSecondaryContainer
-                    message.isSent -> MaterialTheme.colorScheme.onPrimary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Column(modifier = Modifier.padding(12.dp)) {
+                // Display attachment if present
+                if (message.isAttachment && message.attachmentData != null) {
+                    when {
+                        message.attachmentType?.startsWith("image/") == true -> {
+                            val bitmap = decodeByteArrayToImageBitmap(message.attachmentData)
+                            Image(
+                                bitmap = bitmap,
+                                contentDescription = "Attached image",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 200.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Fit
+                            )
+                            if (message.content.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+                        else -> {
+                            Text(
+                                text = "[File attachment: ${message.attachmentType}]",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                            )
+                        }
+                    }
+                }
+
+                // Display text content if present
+                if (message.content.isNotBlank()) {
+                    Text(
+                        text = message.content,
+                        color = when {
+                            message.isServiceMessage -> MaterialTheme.colorScheme.onSecondaryContainer
+                            message.isSent -> MaterialTheme.colorScheme.onPrimary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
         }
     }
 }
+
+// Expect declaration for platform-specific image decoding
+@Composable
+expect fun decodeByteArrayToImageBitmap(byteArray: ByteArray): ImageBitmap
+
+// Expect declaration for platform-specific image picker
+@Composable
+expect fun rememberImagePickerLauncher(onImageSelected: (ByteArray, String) -> Unit): () -> Unit

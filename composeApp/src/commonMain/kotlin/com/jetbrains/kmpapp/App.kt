@@ -37,11 +37,26 @@ fun App(wifiAwareService: WifiAwareService) {
                     val message = Message(
                         content = msg,
                         isSent = false,
-                        isServiceMessage = msg.startsWith("Service discovered:")
+                        isServiceMessage = msg.startsWith("Service discovered:") || msg.startsWith("Connection established")
                     )
                     messages.add(message)
                     lastReceivedMessage.value = msg
                 }
+
+                // Set attachment callback
+                wifiAwareService.setAttachmentCallback { data, type ->
+                    debugLogs.add("[App] Attachment received: type=$type, size=${data.size}")
+                    println("[App] Attachment received: type=$type, size=${data.size}")
+                    val message = Message(
+                        content = "",
+                        isSent = false,
+                        isServiceMessage = false,
+                        attachmentData = data,
+                        attachmentType = type
+                    )
+                    messages.add(message)
+                }
+
                 discoveryStatus.value = "Running"
                 debugLogs.add("[UI] Discovery running.")
             }
@@ -80,7 +95,20 @@ fun App(wifiAwareService: WifiAwareService) {
                 discoveryStatus = discoveryStatus.value,
                 lastReceivedMessage = lastReceivedMessage.value,
                 lastSentMessage = lastSentMessage.value,
-                onRefresh = { refreshDiscovery() }
+                onRefresh = { refreshDiscovery() },
+                onSendAttachment = { data, type ->
+                    debugLogs.add("[App] Sending attachment: type=$type, size=${data.size}")
+                    println("[App] Sending attachment: type=$type, size=${data.size}")
+                    wifiAwareService.sendAttachment(data, type)
+                    val message = Message(
+                        content = "",
+                        isSent = true,
+                        isServiceMessage = false,
+                        attachmentData = data,
+                        attachmentType = type
+                    )
+                    messages.add(message)
+                }
             )
         }
     }   
